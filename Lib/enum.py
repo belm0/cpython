@@ -1,10 +1,13 @@
+import operator
 import sys
+from functools import reduce
+
 from types import MappingProxyType, DynamicClassAttribute
 
 
 __all__ = [
         'EnumMeta',
-        'Enum', 'IntEnum', 'StrEnum', 'Flag', 'IntFlag',
+        'Enum', 'IntEnum', 'StrEnum', 'FlagMeta', 'Flag', 'IntFlag',
         'auto', 'unique',
         ]
 
@@ -721,10 +724,28 @@ class StrEnum(str, Enum):
     __str__ = str.__str__
 
 
+class FlagMeta(EnumMeta):
+    def __new__(metacls, *args):
+        enum_class = super().__new__(metacls, *args)
+        values = (member.value for member in enum_class._member_map_.values())
+        enum_class._all_value = reduce(operator.or_, values, 0)
+        return enum_class
+
+    @property
+    def __all__(cls):
+        # TODO: cache result
+        return cls(cls._all_value)
+
+    @property
+    def __none__(cls):
+        # TODO: cache result
+        return cls(0)
+
+
 def _reduce_ex_by_name(self, proto):
     return self.name
 
-class Flag(Enum):
+class Flag(Enum, metaclass=FlagMeta):
     """Support for flags"""
 
     def _generate_next_value_(name, start, count, last_values):
