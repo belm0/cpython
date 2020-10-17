@@ -785,8 +785,9 @@ class Flag(Enum, metaclass=FlagMeta):
         pseudo_member = cls._value2member_map_.get(value, None)
         if pseudo_member is None:
             # verify all bits are accounted for
-            _, extra_flags = _decompose(cls, value)
-            if extra_flags:
+            # _, extra_flags = _decompose(cls, value)
+            # if extra_flags:
+            if value & ~cls._all_value:
                 raise ValueError("%r is not a valid %s" % (value, cls.__qualname__))
             # construct a singleton enum pseudo-member
             pseudo_member = object.__new__(cls)
@@ -805,15 +806,31 @@ class Flag(Enum, metaclass=FlagMeta):
                     type(other).__qualname__, self.__class__.__qualname__))
         return other._value_ & self._value_ == other._value_
 
+    @staticmethod
+    def _bits(n):
+        while n:
+            b = n & (~n + 1)
+            yield b
+            n ^= b
+
+    @staticmethod
+    def _reversed_bits(n):
+        return reversed(list(Flag._bits(n)))
+
     def __iter__(self):
-        members, _ = _decompose(self.__class__, self.value)
-        return (m for m in members if m._value_ != 0)
+        # members, _ = _decompose(self.__class__, self.value)
+        # return (m for m in members if m._value_ != 0)
+        return map(self.__class__, self._reversed_bits(self._value_))
 
     def __repr__(self):
         cls = self.__class__
         if self._name_ is not None:
             return '<%s.%s: %r>' % (cls.__name__, self._name_, self._value_)
-        members, _ = _decompose(cls, self._value_)
+        #members, _ = _decompose(cls, self._value_)
+        if self._value_:
+            members = list(map(cls, self._reversed_bits(self._value_)))
+        else:
+            members = [cls.__none__]
         return '<%s.%s: %r>' % (
                 cls.__name__,
                 '|'.join([str(m._name_ or m._value_) for m in members]),
@@ -824,13 +841,17 @@ class Flag(Enum, metaclass=FlagMeta):
         cls = self.__class__
         if self._name_ is not None:
             return '%s.%s' % (cls.__name__, self._name_)
-        members, _ = _decompose(cls, self._value_)
+        #members, _ = _decompose(cls, self._value_)
+        if self._value_:
+            members = list(map(cls, self._bits(self._value_)))
+        else:
+            members = [cls.__none__]
         if len(members) == 1 and members[0]._name_ is None:
             return '%s.%r' % (cls.__name__, members[0]._value_)
         else:
             return '%s.%s' % (
                     cls.__name__,
-                    '|'.join([str(m._name_ or m._value_) for m in members]),
+                    '|'.join([str(m._name_ or m._value_) for m in reversed(members)]),
                     )
 
     def __bool__(self):
@@ -852,12 +873,13 @@ class Flag(Enum, metaclass=FlagMeta):
         return self.__class__(self._value_ ^ other._value_)
 
     def __invert__(self):
-        members, _ = _decompose(self.__class__, self._value_)
-        inverted = self.__class__(0)
-        for m in self.__class__:
-            if m not in members and not (m._value_ & self._value_):
-                inverted |= m
-        return inverted
+        # members, _ = _decompose(self.__class__, self._value_)
+        # inverted = self.__class__(0)
+        # for m in self.__class__:
+        #     if m not in members and not (m._value_ & self._value_):
+        #         inverted |= m
+        # return inverted
+        return self ^ self.__class__.__all__
 
 
 class IntFlag(int, Flag):
@@ -876,7 +898,8 @@ class IntFlag(int, Flag):
         if pseudo_member is None:
             need_to_create = [value]
             # get unaccounted for bits
-            _, extra_flags = _decompose(cls, value)
+            #_, extra_flags = _decompose(cls, value)
+            extra_flags = value & ~cls._all_value
             # timer = 10
             while extra_flags:
                 # timer -= 1
@@ -967,3 +990,30 @@ def _decompose(flag, value):
         # we have the breakdown, don't need the value member itself
         members.pop(0)
     return members, not_covered
+
+
+# from enum import Flag, auto
+# class Foo(Flag):
+#     NONE = 0
+#     A = auto()
+#     B = auto()
+#     C = auto()
+#     C2 = C
+#     D = auto()
+#     BC = B | C
+#     BCD = B | C | D
+#     E = auto()
+#     F = auto()
+#
+#
+# class Bar(IntFlag):
+#     NONE = 0
+#     A = auto()
+#     B = auto()
+#     C = auto()
+#     C2 = C
+#     D = auto()
+#     BC = B | C
+#     BCD = B | C | D
+#     E = auto()
+#     F = auto()
